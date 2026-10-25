@@ -12,7 +12,3 @@ build/
 
 # Ignore system files
 .DS_Store
-
-# Ignore helper text files
-combined_project_files.txt
-git_changes.txt
