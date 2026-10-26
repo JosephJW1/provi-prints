@@ -8,9 +8,10 @@ import HomePage from './pages/HomePage';
 import AuthPage from './pages/AuthPage';
 
 interface AuthSessionResponse {
-  id: number;
-  username: string;
-  role: 'admin' | 'customer';
+  authenticated?: boolean;
+  id: number | null;
+  username: string | null;
+  role: 'admin' | 'customer' | null;
 }
 
 const App: React.FC = () => {
@@ -42,7 +43,7 @@ const App: React.FC = () => {
         const response = await api.get<AuthSessionResponse>('/auth/me', {
           signal: controller.signal,
         });
-        setUser(response.data.username);
+        setUser(response.data.username || null);
         setIsAuthChecking(false);
       } catch (error: unknown) {
         // Ignore abort errors caused by React StrictMode double-mounting in development

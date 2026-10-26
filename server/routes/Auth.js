@@ -5,7 +5,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { Op } = require('sequelize');
 const { User } = require('../models');
-const { validateToken, revokeToken, JWT_SECRET } = require('../middlewares/AuthMiddleware');
+const { revokeToken, isTokenRevoked, JWT_SECRET } = require('../middlewares/AuthMiddleware');
 
 const BCRYPT_ROUNDS = 12;
 // Compute a valid 60-character 12-round bcrypt hash at startup to mitigate timing enumeration attacks
@@ -19,10 +19,12 @@ const getCookieOptions = () => {
   // Default to 'none' in production so cross-domain (.pages.dev <-> .run.app) cookies work over HTTPS;
   // set COOKIE_SAMESITE=strict once both frontend and API share the same root custom domain.
   const sameSite = process.env.COOKIE_SAMESITE || (isProd ? 'none' : 'strict');
+  const isCrossSite = sameSite === 'none';
   return {
     httpOnly: true,
-    secure: isProd || sameSite === 'none',
+    secure: isProd || isCrossSite,
     sameSite,
+    ...(isCrossSite ? { partitioned: true } : {}),
     ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}),
     path: '/',
   };
@@ -162,33 +164,44 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Verify Active Session Route
-router.get('/me', validateToken, async (req, res) => {
+// Verify Active Session Route (returns 200 with null user when unauthenticated to avoid browser console 401 noise)
+router.get('/me', async (req, res) => {
+  const cookieName = getCookieName(req);
+  const accessToken = req.cookies?.[cookieName];
+
+  if (!accessToken || isTokenRevoked(accessToken)) {
+    return res.json({ authenticated: false, id: null, username: null, role: null });
+  }
+
   try {
+    const validToken = jwt.verify(accessToken, JWT_SECRET, {
+      algorithms: ['HS256'],
+    });
+
     // Query the database so revoked/deleted users or changed roles take effect immediately
-    const user = await User.findByPk(req.user.id, {
+    const user = await User.findByPk(validToken.id, {
       attributes: ['id', 'username', 'role']
     });
 
-    const cookieName = getCookieName(req);
     if (!user) {
       res.clearCookie(cookieName, getCookieOptions());
-      return res.status(401).json({ error: "Session no longer valid" });
+      return res.json({ authenticated: false, id: null, username: null, role: null });
     }
 
     if (req.headers['x-portal'] === 'admin' && user.role !== 'admin') {
       res.clearCookie(cookieName, getCookieOptions());
-      return res.status(403).json({ error: "Access denied: Admins only" });
+      return res.json({ authenticated: false, id: null, username: null, role: null });
     }
 
     res.json({
+      authenticated: true,
       id: user.id,
       username: user.username,
       role: user.role
     });
   } catch (error) {
-    console.error("Session verification error:", error);
-    res.status(500).json({ error: "Server error verifying session" });
+    res.clearCookie(cookieName, getCookieOptions());
+    return res.json({ authenticated: false, id: null, username: null, role: null });
   }
 });
 

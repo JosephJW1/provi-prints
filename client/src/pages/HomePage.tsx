@@ -136,6 +136,7 @@ const HomePage: React.FC<HomePageProps> = ({ isDarkMode = false }) => {
   const [currentSlide, setCurrentSlide] = useState<number>(0);
   const [townsData, setTownsData] = useState<BackendTown[]>([]);
   const [designsData, setDesignsData] = useState<Design[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
   const [userLocation, setUserLocation] = useState<[number, number]>(FALLBACK_USER_COORDS);
 
   // Swipe tracking refs for the print design coverflow
@@ -160,41 +161,21 @@ const HomePage: React.FC<HomePageProps> = ({ isDarkMode = false }) => {
   // Section refs for smooth scroll navigation
   const townExplorerRef = useRef<HTMLDivElement | null>(null);
   const mapSectionRef = useRef<HTMLDivElement | null>(null);
-  const scrollNavBtnRef = useRef<HTMLButtonElement | null>(null);
-  const scrollBtnTextRef = useRef<HTMLSpanElement | null>(null);
-  const [isScrollBtnInTopThird, setIsScrollBtnInTopThird] = useState<boolean>(false);
-  const [scrollBtnTextWidth, setScrollBtnTextWidth] = useState<number | null>(null);
   const [isPortrait, setIsPortrait] = useState<boolean>(() =>
     typeof window !== 'undefined' ? window.innerHeight > window.innerWidth : false
   );
 
   useEffect(() => {
-    const updateScrollBtnState = () => {
-      if (!scrollNavBtnRef.current) return;
-      const rect = scrollNavBtnRef.current.getBoundingClientRect();
-      const btnCenterY = rect.top + rect.height / 2;
-      setIsScrollBtnInTopThird(btnCenterY <= window.innerHeight / 3);
-    };
-
     const updateOrientation = () => {
       setIsPortrait(window.innerHeight > window.innerWidth);
-      updateScrollBtnState();
     };
 
     updateOrientation();
-    window.addEventListener('scroll', updateScrollBtnState, { passive: true });
     window.addEventListener('resize', updateOrientation, { passive: true });
     return () => {
-      window.removeEventListener('scroll', updateScrollBtnState);
       window.removeEventListener('resize', updateOrientation);
     };
   }, []);
-
-  useEffect(() => {
-    if (scrollBtnTextRef.current) {
-      setScrollBtnTextWidth(scrollBtnTextRef.current.offsetWidth);
-    }
-  }, [isScrollBtnInTopThird]);
 
   const scrollToSection = useCallback(
     (targetRef: React.RefObject<HTMLDivElement | null>, align: 'top' | 'bottom' = 'top') => {
@@ -307,23 +288,30 @@ const HomePage: React.FC<HomePageProps> = ({ isDarkMode = false }) => {
   }, [isPortrait, userLocation, getClampedZoomOutCenter]);
 
   useEffect(() => {
-    api.get<BackendTown[]>('/towns')
-      .then((response) => {
-        setTownsData(response.data);
-      })
-      .catch((error) => {
-        console.error("Error fetching towns:", error);
-      });
+    let isMounted = true;
+    setIsLoadingData(true);
 
-    api.get<Design[]>('/designs')
-      .then((response) => {
-        setDesignsData(response.data);
-      })
-      .catch((error) => {
+    Promise.all([
+      api.get<BackendTown[]>('/towns').catch((error) => {
+        console.error("Error fetching towns:", error);
+        return { data: [] as BackendTown[] };
+      }),
+      api.get<Design[]>('/designs').catch((error) => {
         console.error("Error fetching designs:", error);
-      });
+        return { data: [] as Design[] };
+      }),
+    ]).then(([townsRes, designsRes]) => {
+      if (!isMounted) return;
+      setTownsData(townsRes.data);
+      setDesignsData(designsRes.data);
+      setIsLoadingData(false);
+    });
 
     fetchAndZoomToLocation();
+
+    return () => {
+      isMounted = false;
+    };
   }, [fetchAndZoomToLocation]);
 
   const baseCityUIData: CityUIDefinition[] = [
@@ -672,7 +660,26 @@ const HomePage: React.FC<HomePageProps> = ({ isDarkMode = false }) => {
 
   return (
     <>
-      {slides.length > 0 && (
+      {isLoadingData ? (
+        <section className="max-w-6xl mx-auto px-4 py-12">
+          <div
+            className="relative overflow-hidden rounded-xl shadow-2xl bg-gray-900 border border-transparent dark:border-slate-800 flex flex-col items-center justify-center text-center p-10"
+            style={{ height: '500px' }}
+          >
+            <div className="w-12 h-12 rounded-full border-4 border-[#e9c46a]/30 border-t-[#e9c46a] animate-spin mb-4" />
+            <span className="inline-block px-3 py-1 mb-2 text-xs font-semibold tracking-wider text-gray-900 uppercase bg-[#e9c46a] rounded-full">
+              Loading Collection
+            </span>
+            <h2 className="text-2xl md:text-3xl font-serif font-bold text-white mb-2">
+              Preparing Vintage Travel Prints...
+            </h2>
+            <p className="text-sm text-gray-300 max-w-md">
+              Fetching high-resolution town designs and charity partnerships from our gallery.
+            </p>
+          </div>
+        </section>
+      ) : (
+        slides.length > 0 && (
         <section className="max-w-6xl mx-auto px-4 py-12">
           <div
             className="relative overflow-hidden rounded-xl shadow-2xl bg-gray-900 border border-transparent dark:border-slate-800 group"
@@ -776,18 +783,19 @@ const HomePage: React.FC<HomePageProps> = ({ isDarkMode = false }) => {
             )}
           </div>
         </section>
+        )
       )}
 
       <main className="max-w-6xl mx-auto px-4 py-12 flex flex-col items-center gap-6 border-t border-gray-200 dark:border-slate-800 transition-colors duration-300">
         {/* Unified Town Explorer Section - Fixed height prevents any layout shift when selecting/switching towns */}
         <div
           ref={townExplorerRef}
-          className="w-full h-[650px] md:h-[370px] rounded-3xl bg-white dark:bg-[#141d2b] border border-gray-200 dark:border-slate-800 shadow-lg p-6 md:p-8 flex flex-col md:flex-row items-stretch justify-between gap-6 md:gap-10 overflow-hidden transition-colors duration-300"
+          className="w-full h-[745px] md:h-[455px] rounded-3xl bg-white dark:bg-[#141d2b] border border-gray-200 dark:border-slate-800 shadow-lg p-6 md:p-8 flex flex-col md:flex-row items-stretch justify-between gap-6 md:gap-10 overflow-hidden transition-colors duration-300"
         >
-          {/* Left Side: Town Title, Description, and Interactive Swipable Charities */}
-          <div className="md:w-1/2 h-[285px] md:h-full flex flex-col justify-between text-center md:text-left min-w-0">
+          {/* Left Side: Town Title, Scroll-to-Map Button, Description, and Interactive Swipable Charities */}
+          <div className="md:w-1/2 h-[375px] md:h-full flex flex-col justify-between text-center md:text-left min-w-0">
             <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gray-100 dark:bg-slate-800/90 border border-gray-200 dark:border-slate-700 text-[11px] font-semibold uppercase tracking-widest text-gray-600 dark:text-slate-300 mb-2.5">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-gray-100 dark:bg-slate-800/90 border border-gray-200 dark:border-slate-700 text-[11px] font-semibold uppercase tracking-widest text-gray-600 dark:text-slate-300 mb-3.5">
                 <span
                   className="w-2 h-2 rounded-full"
                   style={{ backgroundColor: activeCityData ? activeCityData.color : '#e9c46a' }}
@@ -802,7 +810,30 @@ const HomePage: React.FC<HomePageProps> = ({ isDarkMode = false }) => {
                 </span>
               </h2>
 
-              <p className="mt-2.5 text-gray-600 dark:text-slate-300 leading-relaxed text-sm md:text-base h-[68px] md:h-[74px] line-clamp-3 overflow-hidden">
+              <div className="mt-3.5 flex justify-center md:justify-start">
+                <button
+                  type="button"
+                  onClick={() => scrollToSection(mapSectionRef, 'bottom')}
+                  className="group inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-gray-50 dark:bg-[#1e293b] hover:bg-gray-100 dark:hover:bg-slate-700/90 text-gray-700 dark:text-slate-200 border border-gray-200 dark:border-slate-700 shadow-sm hover:shadow text-xs font-semibold uppercase tracking-widest transition-all duration-200 cursor-pointer focus:outline-none"
+                  aria-label="Scroll down to interactive map"
+                >
+                  <span>Scroll to Interactive Map</span>
+                  <span className="flex items-center justify-center w-5 h-5 rounded-full bg-[#e9c46a]/20 text-[#d4a338] dark:text-[#e9c46a] shrink-0 transition-transform duration-200 group-hover:translate-y-0.5">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={2.5}
+                      stroke="currentColor"
+                      className="w-3 h-3"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
+                    </svg>
+                  </span>
+                </button>
+              </div>
+
+              <p className="mt-4 text-gray-600 dark:text-slate-300 leading-relaxed text-sm md:text-base h-[68px] md:h-[74px] line-clamp-3 overflow-hidden">
                 {activeCityData
                   ? activeCityData.description
                   : 'Select or hover over a town pin on the interactive map below to uncover its local story, flip through exclusive vintage print designs, and see the charities every order supports.'}
@@ -810,7 +841,7 @@ const HomePage: React.FC<HomePageProps> = ({ isDarkMode = false }) => {
             </div>
 
             {/* Fixed-height Charities Bar with Swipable Pill Strip & Clickable Charity Description */}
-            <div className="pt-2.5 border-t border-gray-100 dark:border-slate-800/90">
+            <div className="pt-3.5 border-t border-gray-100 dark:border-slate-800/90">
               <div className="h-[36px] mb-2 flex items-center justify-center md:justify-start">
                 {activeCharityData ? (
                   <p className="text-xs text-gray-700 dark:text-slate-200 leading-snug line-clamp-2 text-center md:text-left">
@@ -895,7 +926,7 @@ const HomePage: React.FC<HomePageProps> = ({ isDarkMode = false }) => {
           {/* Right Side: Interactive Town Design Carousel (strictly backed by database Design records) */}
           <div className="md:w-1/2 h-[310px] md:h-full flex flex-col items-center justify-between select-none">
             <div
-              className="relative w-full h-[235px] flex items-center justify-center overflow-hidden touch-pan-y"
+              className="relative w-full flex-1 flex items-center justify-center overflow-hidden touch-pan-y"
               style={{ perspective: '1000px' }}
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
@@ -903,7 +934,17 @@ const HomePage: React.FC<HomePageProps> = ({ isDarkMode = false }) => {
               onPointerCancel={handlePointerEnd}
               onPointerLeave={handlePointerEnd}
             >
-              {totalDesigns === 0 ? (
+              {isLoadingData ? (
+                <div className="flex flex-col items-center justify-center text-center px-6 py-8 rounded-2xl border border-gray-200 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-800/40 max-w-xs">
+                  <div className="w-8 h-8 rounded-full border-3 border-[#e9c46a]/30 border-t-[#e9c46a] animate-spin mb-3" />
+                  <p className="text-sm font-serif font-semibold text-gray-700 dark:text-slate-200">
+                    Loading town designs...
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+                    Please wait while we fetch the latest prints from the server.
+                  </p>
+                </div>
+              ) : totalDesigns === 0 ? (
                 <div className="flex flex-col items-center justify-center text-center px-6 py-8 rounded-2xl border border-dashed border-gray-300 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-800/40 max-w-xs">
                   <p className="text-sm font-serif font-semibold text-gray-700 dark:text-slate-200">
                     {activeCityData
@@ -911,8 +952,9 @@ const HomePage: React.FC<HomePageProps> = ({ isDarkMode = false }) => {
                       : 'No designs uploaded yet'}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
-                    Upload a design in the Admin panel and link it to{' '}
-                    {activeCityData ? activeCityData.name : 'a town'} to display it here.
+                    {activeCityData
+                      ? `Check back soon for new ${activeCityData.name} travel prints.`
+                      : 'Check back soon for new travel prints.'}
                   </p>
                 </div>
               ) : (
@@ -1000,7 +1042,11 @@ const HomePage: React.FC<HomePageProps> = ({ isDarkMode = false }) => {
 
               <div className="flex flex-col items-center">
                 <p className="text-xs font-semibold text-gray-800 dark:text-slate-200 truncate max-w-[220px]">
-                  {activeDesign ? activeDesign.title : 'No designs to display'}
+                  {isLoadingData
+                    ? 'Loading designs...'
+                    : activeDesign
+                    ? activeDesign.title
+                    : 'No designs to display'}
                 </p>
                 {totalDesigns > 0 && (
                   <div className="flex items-center gap-1.5 mt-1">
@@ -1035,48 +1081,6 @@ const HomePage: React.FC<HomePageProps> = ({ isDarkMode = false }) => {
             </div>
           </div>
         </div>
-
-        {/* Modern Scroll Navigation Button between Town Explorer and Interactive Map */}
-        <button
-          ref={scrollNavBtnRef}
-          type="button"
-          onClick={() =>
-            isScrollBtnInTopThird
-              ? scrollToSection(townExplorerRef, 'top')
-              : scrollToSection(mapSectionRef, 'bottom')
-          }
-          className="group flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-white dark:bg-[#141d2b] hover:bg-gray-50 dark:hover:bg-slate-800/90 text-gray-700 dark:text-slate-200 border border-gray-200 dark:border-slate-800 shadow-md hover:shadow-lg text-xs font-semibold uppercase tracking-widest transition-all duration-250 ease-out cursor-pointer focus:outline-none"
-          aria-label={isScrollBtnInTopThird ? 'Scroll up to explore town' : 'Scroll down to interactive map'}
-        >
-          <span
-            style={{
-              width: scrollBtnTextWidth !== null ? `${scrollBtnTextWidth}px` : undefined,
-            }}
-            className="inline-flex items-center justify-center overflow-hidden transition-[width] duration-250 ease-out"
-          >
-            <span ref={scrollBtnTextRef} className="whitespace-nowrap">
-              {isScrollBtnInTopThird ? 'Scroll to Explore Town' : 'Scroll to Interactive Map'}
-            </span>
-          </span>
-          <span
-            className={`flex items-center justify-center w-6 h-6 rounded-full bg-[#e9c46a]/20 text-[#d4a338] dark:text-[#e9c46a] shrink-0 transition-transform duration-250 ease-out ${
-              isScrollBtnInTopThird ? 'group-hover:-translate-y-0.5' : 'group-hover:translate-y-0.5'
-            }`}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2.5}
-              stroke="currentColor"
-              className={`w-3.5 h-3.5 transition-transform duration-250 ease-out ${
-                isScrollBtnInTopThird ? 'rotate-180' : 'rotate-0'
-              }`}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
-            </svg>
-          </span>
-        </button>
 
         <div ref={mapSectionRef} className="w-full relative flex justify-center">
           {/* Top-right map zoom controls */}

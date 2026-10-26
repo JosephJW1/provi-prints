@@ -110,4 +110,4 @@ const isAdmin = async (req, res, next) => {
   }
 };
 
-module.exports = { validateToken, isAdmin, revokeToken, JWT_SECRET };
+module.exports = { validateToken, isAdmin, revokeToken, isTokenRevoked, JWT_SECRET };

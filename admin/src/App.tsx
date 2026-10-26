@@ -13,9 +13,10 @@ import TownsPage from './pages/TownsPage';
 import UsersPage from './pages/UsersPage';
 
 interface AuthSessionResponse {
-  id: number;
-  username: string;
-  role: 'admin' | 'customer';
+  authenticated?: boolean;
+  id: number | null;
+  username: string | null;
+  role: 'admin' | 'customer' | null;
 }
 
 const App: React.FC = () => {
@@ -52,11 +53,13 @@ const App: React.FC = () => {
         const response = await api.get<AuthSessionResponse>('/auth/me', {
           signal: controller.signal,
         });
-        if (response.data.role === 'admin') {
+        if (response.data.username && response.data.role === 'admin') {
           setAdminUser(response.data.username);
-        } else {
+        } else if (response.data.username) {
           // If a customer session cookie is present, revoke it immediately
           await api.post('/auth/logout').catch(() => {});
+          setAdminUser(null);
+        } else {
           setAdminUser(null);
         }
         setIsInitializing(false);
