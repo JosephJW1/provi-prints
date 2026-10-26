@@ -1187,8 +1187,11 @@ const HomePage: React.FC<HomePageProps> = ({ isDarkMode = false }) => {
           <h2 className="text-3xl md:text-4xl font-serif font-bold text-gray-800 dark:text-[#fdfbf7]">
             Our <span className="text-[#e9c46a]">Products</span>
           </h2>
+          <h2 className="text-3xl md:text-4xl font-serif font-bold text-gray-800 dark:text-[#fdfbf7]">
+            (Coming Soon)
+          </h2>
           <p className="mt-2 text-sm md:text-base text-gray-600 dark:text-slate-300 max-w-xl mx-auto">
-            Every design is available across three archival-grade formats, crafted to suit any space.
+            Every design will be available across three archival-grade formats, crafted to suit any space.
           </p>
         </div>
 

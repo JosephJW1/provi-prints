@@ -113,7 +113,7 @@ const App: React.FC = () => {
                 Home
               </Link>
             </li>
-            <li>
+            {/* <li>
               <button
                 type="button"
                 className="hover:text-[#e9c46a] transition-colors duration-300 focus:outline-none pb-1 border-b-2 border-transparent hover:border-[#e9c46a]"
@@ -128,7 +128,7 @@ const App: React.FC = () => {
               >
                 Information
               </button>
-            </li>
+            </li> */}
             {!isAuthChecking && (
               user ? (
                 <li>
