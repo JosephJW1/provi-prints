@@ -138,6 +138,28 @@ async function getTemporaryMasterDownloadUrl(privateMasterKey, expiresInSeconds 
 }
 
 /**
+ * Generates a 48-hour presigned URL (inline, no attachment header) specifically for
+ * Prodigi API v4 print fulfillment workers to fetch the private 300 DPI master file.
+ *
+ * @param {string} privateMasterKey
+ * @param {number} [expiresInSeconds=172800]
+ * @returns {Promise<string>}
+ */
+async function getProdigiMasterAssetUrl(privateMasterKey, expiresInSeconds = 172800) {
+  const r2Client = getR2Client();
+  const privateBucket = process.env.R2_PRIVATE_BUCKET_NAME || 'design-masters-private';
+
+  const command = new GetObjectCommand({
+    Bucket: privateBucket,
+    Key: privateMasterKey,
+  });
+
+  return getSignedUrl(r2Client, command, {
+    expiresIn: expiresInSeconds,
+  });
+}
+
+/**
  * Deletes both the public watermarked preview and the private high-resolution master
  * from their respective Cloudflare R2 buckets when a Design record is deleted.
  *
@@ -180,5 +202,6 @@ async function deleteDesignAssets(publicPreviewKey, privateMasterKey) {
 module.exports = {
   uploadNewDesignAssets,
   getTemporaryMasterDownloadUrl,
+  getProdigiMasterAssetUrl,
   deleteDesignAssets,
 };
