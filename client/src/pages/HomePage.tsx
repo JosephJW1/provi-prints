@@ -9,6 +9,8 @@ import {
 } from 'react-simple-maps';
 import api from '../api/axios';
 import ProtectedDesignPreview from '../components/ProtectedDesignPreview';
+import PrintPurchaseModal from '../components/PrintPurchaseModal';
+import type { StoreCharity, StoreProduct } from '../context/CartContext';
 
 // --- Type Definitions aligned with Backend Models (Design & Towns) ---
 interface HomePageProps {
@@ -136,7 +138,22 @@ const HomePage: React.FC<HomePageProps> = ({ isDarkMode = false }) => {
   const [currentSlide, setCurrentSlide] = useState<number>(0);
   const [townsData, setTownsData] = useState<BackendTown[]>([]);
   const [designsData, setDesignsData] = useState<Design[]>([]);
+  const [productsData, setProductsData] = useState<StoreProduct[]>([]);
+  const [charitiesData, setCharitiesData] = useState<StoreCharity[]>([]);
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
+  const [purchaseModalState, setPurchaseModalState] = useState<{
+    isOpen: boolean;
+    design: Design | null;
+    productId: number | null;
+    townName: string | null;
+    charityName: string | null;
+  }>({
+    isOpen: false,
+    design: null,
+    productId: null,
+    townName: null,
+    charityName: null,
+  });
   const [userLocation, setUserLocation] = useState<[number, number]>(FALLBACK_USER_COORDS);
 
   // Swipe tracking refs for the print design coverflow
@@ -300,10 +317,20 @@ const HomePage: React.FC<HomePageProps> = ({ isDarkMode = false }) => {
         console.error("Error fetching designs:", error);
         return { data: [] as Design[] };
       }),
-    ]).then(([townsRes, designsRes]) => {
+      api.get<StoreProduct[]>('/products').catch((error) => {
+        console.error("Error fetching products:", error);
+        return { data: [] as StoreProduct[] };
+      }),
+      api.get<StoreCharity[]>('/charities').catch((error) => {
+        console.error("Error fetching charities:", error);
+        return { data: [] as StoreCharity[] };
+      }),
+    ]).then(([townsRes, designsRes, productsRes, charitiesRes]) => {
       if (!isMounted) return;
       setTownsData(townsRes.data);
       setDesignsData(designsRes.data);
+      setProductsData(productsRes.data);
+      setCharitiesData(charitiesRes.data);
       setIsLoadingData(false);
     });
 
@@ -423,8 +450,17 @@ const HomePage: React.FC<HomePageProps> = ({ isDarkMode = false }) => {
     const dbDesigns =
       fromDesignsEndpoint.length > 0 ? fromDesignsEndpoint : fromTownsEndpoint;
 
+    const dbCharitiesForCity = charitiesData
+      .filter((c) => c.Town?.townName?.toLowerCase() === city.name.toLowerCase())
+      .map((c) => ({
+        name: c.name,
+        logo: c.logo_url || `https://placehold.co/60x60/1e293b/ffffff?text=${encodeURIComponent(c.name.slice(0, 3).toUpperCase())}`,
+        description: c.description || '',
+      }));
+
     return {
       ...city,
+      charities: dbCharitiesForCity.length > 0 ? dbCharitiesForCity : city.charities,
       designs: dbDesigns,
     };
   });
@@ -732,11 +768,26 @@ const HomePage: React.FC<HomePageProps> = ({ isDarkMode = false }) => {
                         </div>
                       </div>
                     )}
-                    <div className="flex items-center justify-between max-w-sm">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPurchaseModalState({
+                            isOpen: true,
+                            design: slide.design,
+                            productId: null,
+                            townName: slide.city,
+                            charityName: slide.charities[0]?.name || null,
+                          })
+                        }
+                        className="px-6 py-2 bg-[#e9c46a] hover:bg-[#f4d58d] text-gray-900 font-bold rounded transition-colors shadow-lg cursor-pointer"
+                      >
+                        Order This Print
+                      </button>
                       <button
                         type="button"
                         onClick={() => handleSelectCity(slide.city, true)}
-                        className="px-6 py-2 bg-white dark:bg-[#e9c46a] text-gray-900 font-bold rounded hover:bg-gray-200 dark:hover:bg-[#f4d58d] transition-colors shadow-lg cursor-pointer"
+                        className="px-5 py-2 bg-white/95 hover:bg-white text-gray-900 font-bold rounded transition-colors shadow-lg cursor-pointer"
                       >
                         Explore {slide.city} Designs
                       </button>
@@ -1041,13 +1092,32 @@ const HomePage: React.FC<HomePageProps> = ({ isDarkMode = false }) => {
               </button>
 
               <div className="flex flex-col items-center">
-                <p className="text-xs font-semibold text-gray-800 dark:text-slate-200 truncate max-w-[220px]">
-                  {isLoadingData
-                    ? 'Loading designs...'
-                    : activeDesign
-                    ? activeDesign.title
-                    : 'No designs to display'}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs font-semibold text-gray-800 dark:text-slate-200 truncate max-w-[165px]">
+                    {isLoadingData
+                      ? 'Loading designs...'
+                      : activeDesign
+                      ? activeDesign.title
+                      : 'No designs to display'}
+                  </p>
+                  {activeDesign && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPurchaseModalState({
+                          isOpen: true,
+                          design: activeDesign,
+                          productId: null,
+                          townName: activeCityData?.name || activeDesign.Towns?.[0]?.townName || null,
+                          charityName: selectedCharityName,
+                        })
+                      }
+                      className="px-2.5 py-0.5 rounded-full bg-[#e9c46a] hover:bg-[#f4d58d] text-gray-900 text-[10px] font-extrabold uppercase tracking-wider shadow-xs transition-colors cursor-pointer shrink-0"
+                    >
+                      Buy Print
+                    </button>
+                  )}
+                </div>
                 {totalDesigns > 0 && (
                   <div className="flex items-center gap-1.5 mt-1">
                     {currentDesigns.map((d, idx) => (
@@ -1178,44 +1248,58 @@ const HomePage: React.FC<HomePageProps> = ({ isDarkMode = false }) => {
         </div>
       </main>
 
-      {/* Basic Products Section (Posters, Framed Prints, Postcards) */}
+      {/* Archival Products Section (Posters, Framed Prints, Postcards) */}
       <section className="max-w-6xl mx-auto px-4 py-16 border-t border-gray-200 dark:border-slate-800 transition-colors duration-300">
         <div className="text-center mb-10">
           <span className="inline-block px-3 py-1 mb-2 text-[11px] font-semibold uppercase tracking-widest rounded-full bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700">
-            Print Formats
+            Print Formats • Free UK Delivery
           </span>
           <h2 className="text-3xl md:text-4xl font-serif font-bold text-gray-800 dark:text-[#fdfbf7]">
             Our <span className="text-[#e9c46a]">Products</span>
           </h2>
-          <h2 className="text-3xl md:text-4xl font-serif font-bold text-gray-800 dark:text-[#fdfbf7]">
-            (Coming Soon)
-          </h2>
           <p className="mt-2 text-sm md:text-base text-gray-600 dark:text-slate-300 max-w-xl mx-auto">
-            Every design will be available across three archival-grade formats, crafted to suit any space.
+            Every town design is printed on-demand in the UK across archival-grade formats, with 100% of net profits supporting your chosen local charity.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {[
-            {
-              title: 'Posters',
-              price: 'From £19.99',
-              description:
-                'Museum-quality 250gsm matte archival paper with rich vintage pigment inks, ready to hang or frame.',
-            },
-            {
-              title: 'Framed Prints',
-              price: 'From £44.99',
-              description:
-                'Hand-finished solid wood frames in black, oak, or white with shatter-resistant gallery glazing.',
-            },
-            {
-              title: 'Postcards',
-              price: 'From £3.99',
-              description:
-                'Thick 350gsm textured souvenir cards—ideal for gifting, collecting, or sending a piece of home.',
-            },
-          ].map((product) => (
+          {(productsData.length > 0
+            ? productsData.map((p) => {
+                const prices = (p.ProductVariants || []).map((v) => v.price_pence);
+                const minPence = prices.length > 0 ? Math.min(...prices) : null;
+                return {
+                  id: p.id,
+                  title: p.name,
+                  price: minPence !== null ? `From £${(minPence / 100).toFixed(2)}` : 'Configure Size',
+                  description:
+                    p.description ||
+                    'Archival museum-grade print fulfilled in the UK via Prodigi.',
+                };
+              })
+            : [
+                {
+                  id: null,
+                  title: 'Posters',
+                  price: 'From £19.99',
+                  description:
+                    'Museum-quality 250gsm matte archival paper with rich vintage pigment inks, ready to hang or frame.',
+                },
+                {
+                  id: null,
+                  title: 'Framed Prints',
+                  price: 'From £44.99',
+                  description:
+                    'Hand-finished solid wood frames in black, oak, or white with shatter-resistant gallery glazing.',
+                },
+                {
+                  id: null,
+                  title: 'Postcards',
+                  price: 'From £4.99',
+                  description:
+                    'Thick 350gsm textured souvenir cards—ideal for gifting, collecting, or sending a piece of home.',
+                },
+              ]
+          ).map((product) => (
             <div
               key={product.title}
               className="rounded-2xl bg-white dark:bg-[#141d2b] border border-gray-200 dark:border-slate-800 p-6 shadow-md flex flex-col justify-between transition-colors duration-300"
@@ -1235,14 +1319,35 @@ const HomePage: React.FC<HomePageProps> = ({ isDarkMode = false }) => {
               </div>
               <button
                 type="button"
-                className="mt-6 w-full py-2.5 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-semibold uppercase tracking-wider text-gray-800 dark:text-slate-200 transition-colors cursor-pointer"
+                onClick={() =>
+                  setPurchaseModalState({
+                    isOpen: true,
+                    design: activeDesign || designsData[0] || null,
+                    productId: product.id,
+                    townName: activeCityData?.name || null,
+                    charityName: selectedCharityName,
+                  })
+                }
+                className="mt-6 w-full py-2.5 rounded-lg bg-[#2c3e50] hover:bg-[#1f2d3a] dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-semibold uppercase tracking-wider text-white dark:text-[#e9c46a] transition-colors cursor-pointer"
               >
-                Browse {product.title}
+                Order {product.title}
               </button>
             </div>
           ))}
         </div>
       </section>
+
+      <PrintPurchaseModal
+        isOpen={purchaseModalState.isOpen}
+        onClose={() => setPurchaseModalState((prev) => ({ ...prev, isOpen: false }))}
+        design={purchaseModalState.design}
+        allDesigns={designsData}
+        products={productsData}
+        charities={charitiesData}
+        initialProductId={purchaseModalState.productId}
+        preferredTownName={purchaseModalState.townName}
+        preferredCharityName={purchaseModalState.charityName}
+      />
     </>
   );
 };
