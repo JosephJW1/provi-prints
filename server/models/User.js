@@ -21,9 +21,9 @@ module.exports = (sequelize, DataTypes) => {
     role: {
       type: DataTypes.STRING,
       allowNull: false,
-      defaultValue: 'customer', // All new users default to customer
+      defaultValue: "customer", // All new users default to customer
       validate: {
-        isIn: [['customer', 'admin']],
+        isIn: [["customer", "admin"]],
       },
     },
     stripe_customer_id: {
@@ -31,6 +31,15 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
     },
   });
+
+  User.associate = (models) => {
+    if (models.Order) {
+      User.hasMany(models.Order, {
+        foreignKey: "userId",
+        onDelete: "SET NULL",
+      });
+    }
+  };
 
   return User;
 };
