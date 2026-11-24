@@ -5,7 +5,7 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
     },
     latitude: {
-      type: DataTypes.FLOAT, 
+      type: DataTypes.FLOAT,
       allowNull: false,
     },
     longitude: {
@@ -15,10 +15,16 @@ module.exports = (sequelize, DataTypes) => {
   });
 
   Towns.associate = (models) => {
-    Towns.belongsToMany(models.Design, { 
-      through: 'DesignTowns', 
-      foreignKey: 'townId' 
+    Towns.belongsToMany(models.Design, {
+      through: "DesignTowns",
+      foreignKey: "townId",
     });
+    if (models.Charity) {
+      Towns.hasMany(models.Charity, {
+        foreignKey: "townId",
+        onDelete: "SET NULL",
+      });
+    }
   };
 
   return Towns;

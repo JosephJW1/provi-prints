@@ -5,6 +5,7 @@ const rateLimit = require("express-rate-limit");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const db = require("./models");
+const { seedStoreDefaults, ensureProductionColumns } = require("./utils/seedCharities");
 
 const app = express();
 
@@ -19,8 +20,13 @@ app.use(
   })
 );
 
-// Limit JSON body size to mitigate large-payload DoS attacks
-app.use(express.json({ limit: "10kb" }));
+// Mount Stripe & Prodigi Webhooks BEFORE express.json({ limit: "10kb" })
+// so /webhooks/stripe receives the raw Buffer for signature verification and larger event payloads succeed.
+const webhooksRouter = require("./routes/Webhooks");
+app.use("/webhooks", webhooksRouter);
+
+// Limit JSON body size on standard API routes to mitigate large-payload DoS attacks
+app.use(express.json({ limit: "25kb" }));
 
 const allowedOrigins = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(",").map((origin) => origin.trim())
@@ -53,9 +59,19 @@ const authLimiter = rateLimit({
   message: { error: "Too many authentication attempts, please try again in 15 minutes." },
 });
 
+// Dedicated rate limiter for Stripe Checkout session creation to prevent session spam
+const checkoutLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many checkout attempts from this IP, please try again shortly." },
+});
+
 app.use(apiLimiter);
 app.use("/auth/login", authLimiter);
 app.use("/auth/register", authLimiter);
+app.use("/checkout/create-session", checkoutLimiter);
 
 // Routers
 const authRouter = require("./routes/Auth");
@@ -72,6 +88,15 @@ app.use("/towns", townRouter);
 
 const designsRouter = require("./routes/Designs");
 app.use("/designs", designsRouter);
+
+const charitiesRouter = require("./routes/Charities");
+app.use("/charities", charitiesRouter);
+
+const checkoutRouter = require("./routes/Checkout");
+app.use("/checkout", checkoutRouter);
+
+const ordersRouter = require("./routes/Orders");
+app.use("/orders", ordersRouter);
 
 // Health check to verify active server build
 app.get("/health", (req, res) => {
@@ -103,9 +128,13 @@ const PORT = Number(process.env.PORT) || 3001;
 db.sequelize
   .sync()
   .then(async () => {
-    if (db.Design && process.env.NODE_ENV !== "production") {
-      await db.Design.sync({ alter: true });
+    await ensureProductionColumns(db);
+    if (process.env.NODE_ENV !== "production") {
+      if (db.Design) await db.Design.sync({ alter: true });
+      if (db.ProductVariant) await db.ProductVariant.sync({ alter: true });
     }
+    await seedStoreDefaults(db);
+
     const server = app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server running on port ${PORT}`);
     });
