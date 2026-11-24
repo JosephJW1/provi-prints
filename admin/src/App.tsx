@@ -11,6 +11,8 @@ import DesignsPage from './pages/DesignsPage';
 import DesignEditPage from './pages/DesignEditPage';
 import TownsPage from './pages/TownsPage';
 import UsersPage from './pages/UsersPage';
+import OrdersPage from './pages/OrdersPage';
+import CharitiesPage from './pages/CharitiesPage';
 
 interface AuthSessionResponse {
   authenticated?: boolean;
@@ -149,6 +151,8 @@ const App: React.FC = () => {
 
         <nav className="flex-1 p-4 space-y-2">
           <Link to="/" className={navItemClass('/')}>Dashboard</Link>
+          <Link to="/orders" className={navItemClass('/orders')}>Orders &amp; Print Studio</Link>
+          <Link to="/charities" className={navItemClass('/charities')}>Charities &amp; Payouts</Link>
           <Link to="/designs" className={navItemClass('/designs')}>Designs</Link>
           <Link to="/products" className={navItemClass('/products')}>Products</Link>
           <Link to="/towns" className={navItemClass('/towns')}>Towns</Link>
@@ -221,6 +225,9 @@ const App: React.FC = () => {
               </div>
             }
           />
+
+          <Route path="/orders" element={<OrdersPage />} />
+          <Route path="/charities" element={<CharitiesPage />} />
 
           <Route path="/designs" element={<DesignsPage />} />
           <Route path="/designs/new" element={<DesignEditPage />} />
