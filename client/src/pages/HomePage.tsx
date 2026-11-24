@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   ComposableMap,
   Geographies,
@@ -10,7 +11,7 @@ import {
 import api from '../api/axios';
 import ProtectedDesignPreview from '../components/ProtectedDesignPreview';
 import PrintPurchaseModal from '../components/PrintPurchaseModal';
-import type { StoreCharity, StoreProduct } from '../context/CartContext';
+import { useCart, type StoreCharity, type StoreProduct } from '../context/CartContext';
 
 // --- Type Definitions aligned with Backend Models (Design & Towns) ---
 interface HomePageProps {
@@ -132,6 +133,16 @@ const TownMarker: React.FC<TownMarkerProps> = ({ city, isSelected, onSelect }) =
 };
 
 const HomePage: React.FC<HomePageProps> = ({ isDarkMode = false }) => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { openDrawer } = useCart();
+  const isCheckoutCancelled = searchParams.get('checkout') === 'cancelled';
+
+  const dismissCancelledCheckout = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('checkout');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
   const [selectedCharityName, setSelectedCharityName] = useState<string | null>(null);
   const [activeDesignIndex, setActiveDesignIndex] = useState<number>(0);
@@ -696,6 +707,36 @@ const HomePage: React.FC<HomePageProps> = ({ isDarkMode = false }) => {
 
   return (
     <>
+      {isCheckoutCancelled && (
+        <div className="max-w-6xl mx-auto px-4 pt-6">
+          <div className="rounded-xl bg-amber-50 dark:bg-[#1e293b] border border-[#e9c46a]/70 px-5 py-3.5 shadow-sm flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs md:text-sm text-gray-800 dark:text-slate-200">
+              <strong className="font-serif">Checkout cancelled</strong> — no payment was taken, and your selected prints &amp; charities are still saved in your basket.
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  dismissCancelledCheckout();
+                  openDrawer();
+                }}
+                className="px-3.5 py-1.5 rounded-lg bg-[#2c3e50] hover:bg-[#1f2d3a] dark:bg-[#e9c46a] dark:hover:bg-[#f4d58d] text-white dark:text-gray-900 text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors"
+              >
+                Reopen Basket
+              </button>
+              <button
+                type="button"
+                onClick={dismissCancelledCheckout}
+                className="p-1.5 rounded-lg text-gray-500 hover:text-gray-800 dark:text-slate-400 dark:hover:text-white text-xs cursor-pointer"
+                aria-label="Dismiss notice"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isLoadingData ? (
         <section className="max-w-6xl mx-auto px-4 py-12">
           <div
