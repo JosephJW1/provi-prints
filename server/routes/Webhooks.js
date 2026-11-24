@@ -55,6 +55,22 @@ router.post(
           break;
         }
 
+        case "checkout.session.expired": {
+          const expiredSession = event.data.object;
+          if (expiredSession?.id) {
+            await db.Order.update(
+              { status: "cancelled" },
+              {
+                where: {
+                  stripe_session_id: expiredSession.id,
+                  status: "pending_payment",
+                },
+              }
+            );
+          }
+          break;
+        }
+
         case "charge.refunded": {
           const charge = event.data.object;
           const paymentIntentId =

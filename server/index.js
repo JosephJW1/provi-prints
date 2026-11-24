@@ -5,7 +5,7 @@ const rateLimit = require("express-rate-limit");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const db = require("./models");
-const { seedStoreDefaults } = require("./utils/seedCharities");
+const { seedStoreDefaults, ensureProductionColumns } = require("./utils/seedCharities");
 
 const app = express();
 
@@ -59,9 +59,19 @@ const authLimiter = rateLimit({
   message: { error: "Too many authentication attempts, please try again in 15 minutes." },
 });
 
+// Dedicated rate limiter for Stripe Checkout session creation to prevent session spam
+const checkoutLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many checkout attempts from this IP, please try again shortly." },
+});
+
 app.use(apiLimiter);
 app.use("/auth/login", authLimiter);
 app.use("/auth/register", authLimiter);
+app.use("/checkout/create-session", checkoutLimiter);
 
 // Routers
 const authRouter = require("./routes/Auth");
@@ -118,6 +128,7 @@ const PORT = Number(process.env.PORT) || 3001;
 db.sequelize
   .sync()
   .then(async () => {
+    await ensureProductionColumns(db);
     if (process.env.NODE_ENV !== "production") {
       if (db.Design) await db.Design.sync({ alter: true });
       if (db.ProductVariant) await db.ProductVariant.sync({ alter: true });

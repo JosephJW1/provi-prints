@@ -225,4 +225,31 @@ async function seedStoreDefaults(db) {
   }
 }
 
-module.exports = { seedStoreDefaults };
+async function ensureProductionColumns(db) {
+  try {
+    const qi = db.sequelize.getQueryInterface();
+    const { DataTypes } = db.Sequelize;
+
+    const variantCols = await qi.describeTable("ProductVariants");
+    if (!variantCols.prodigi_sku) {
+      await qi.addColumn("ProductVariants", "prodigi_sku", {
+        type: DataTypes.STRING,
+        allowNull: false,
+        defaultValue: "GLOBAL-PAP-A4",
+      });
+      console.log("[Schema] Added missing column ProductVariants.prodigi_sku");
+    }
+    if (!variantCols.estimated_cost_pence) {
+      await qi.addColumn("ProductVariants", "estimated_cost_pence", {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0,
+      });
+      console.log("[Schema] Added missing column ProductVariants.estimated_cost_pence");
+    }
+  } catch (err) {
+    console.warn("[Schema] Warning checking ProductVariants columns:", err.message);
+  }
+}
+
+module.exports = { seedStoreDefaults, ensureProductionColumns };
